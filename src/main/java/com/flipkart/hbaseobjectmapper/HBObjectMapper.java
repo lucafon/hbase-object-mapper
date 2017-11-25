@@ -95,7 +95,9 @@ public class HBObjectMapper {
                         continue;
                     Map.Entry<Long, byte[]> lastEntry = columnVersionsMap.lastEntry();
                     objectSetFieldValue(record, field, lastEntry.getValue(), hbColumn.codecFlags());
-                } else {
+                } else if(hbColumn.isMultiId()){
+                	  
+                }else {
                     objectSetFieldValue(record, field, columnVersionsMap, hbColumn.codecFlags());
                 }
             }
@@ -282,12 +284,42 @@ public class HBObjectMapper {
                 Map<byte[], NavigableMap<Long, byte[]>> columns = map.get(family);
                 numOfFieldsToWrite++;
                 columns.put(columnName, fieldValueVersions);
+            } else if(hbColumn.isMultiId()) {
+	            	if (!isInstanceValid(field.getType())) {
+	            		throw new UnsupportedFieldTypeException("Field " + field.getName() + " must be a List");	
+	            	}
+	            	try {
+	            		byte[] family = Bytes.toBytes(hbColumn.family()), columnName = null;
+	            		Map<byte[], NavigableMap<Long, byte[]>> columns = map.get(family);
+	            		field.setAccessible(true);
+	            		List<Object> list = (List<Object>) field.get(obj);
+	            		for (Object listObj : list) {
+	            			columnName = Bytes.toBytes(listObj.getClass().getDeclaredMethod(hbColumn.method()).invoke(listObj).toString());
+	            			final byte[] fieldValueBytes = valueToByteArray((Serializable) listObj, hbColumn.codecFlags());
+	            			if (fieldValueBytes == null || fieldValueBytes.length == 0) {
+	            				continue;
+	            			}
+	            			numOfFieldsToWrite++;
+	            			columns.put(columnName, new TreeMap<Long, byte[]>() {
+	            				{
+	            					put(HConstants.LATEST_TIMESTAMP, fieldValueBytes);
+	            				}
+	            			});
+	            		}
+	            	} catch (IllegalAccessException | IllegalArgumentException | InvocationTargetException
+	            			| NoSuchMethodException | SecurityException e) {
+	            		throw new BadHBaseLibStateException(e);
+	            	}
             }
         }
         if (numOfFieldsToWrite == 0) {
             throw new AllHBColumnFieldsNullException();
         }
         return map;
+    }
+    
+    private static boolean isInstanceValid(Class<?> type) {
+    			return type.isAssignableFrom(List.class);
     }
 
     private <R extends Serializable & Comparable<R>> byte[] getFieldValueAsBytes(HBRecord<R> record, Field field, Map<String, String> codecFlags) {
