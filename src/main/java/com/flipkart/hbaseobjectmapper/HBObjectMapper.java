@@ -180,7 +180,9 @@ public class HBObjectMapper {
                     validateHBColumnSingleVersionField(field);
                 } else if (hbColumn.isMultiVersioned()) {
                     validateHBColumnMultiVersionField(field);
-                }
+                } else if (hbColumn.isMultiId()) {
+                		validateHBColumnMultiIdField(field);
+	            	}
                 if (!columns.add(new FamilyAndColumn(hbColumn.family(), hbColumn.column()))) {
                     throw new FieldsMappedToSameColumnException(String.format("Class %s has more than one field (e.g. '%s') mapped to same HBase column %s", clazz.getName(), field.getName(), hbColumn));
                 }
@@ -297,9 +299,6 @@ public class HBObjectMapper {
                 numOfFieldsToWrite++;
                 columns.put(columnName, fieldValueVersions);
             } else if(hbColumn.isMultiId()) {
-	            	if (!isInstanceValid(field.getType())) {
-	            		throw new UnsupportedFieldTypeException("Field " + field.getName() + " must be a List");	
-	            	}
 	            	try {
 	            		byte[] family = Bytes.toBytes(hbColumn.family()), columnName = null;
 	            		Map<byte[], NavigableMap<Long, byte[]>> columns = map.get(family);
@@ -330,8 +329,10 @@ public class HBObjectMapper {
         return map;
     }
     
-    private static boolean isInstanceValid(Class<?> type) {
-    			return type.isAssignableFrom(List.class);
+    private void validateHBColumnMultiIdField(Field field) {
+		if(!field.getType().isAssignableFrom(List.class)) {
+			throw new UnsupportedFieldTypeException(String.format("Field %s must be a List", field.getName()));
+		}
     }
 
     private <R extends Serializable & Comparable<R>> byte[] getFieldValueAsBytes(HBRecord<R> record, Field field, Map<String, String> codecFlags) {
