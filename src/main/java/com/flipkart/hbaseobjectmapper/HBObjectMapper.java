@@ -6,6 +6,11 @@ import com.flipkart.hbaseobjectmapper.codec.DeserializationException;
 import com.flipkart.hbaseobjectmapper.codec.SerializationException;
 import com.flipkart.hbaseobjectmapper.exceptions.*;
 import com.flipkart.hbaseobjectmapper.exceptions.InternalError;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+
 import org.apache.hadoop.hbase.Cell;
 import org.apache.hadoop.hbase.CellUtil;
 import org.apache.hadoop.hbase.HConstants;
@@ -95,9 +100,16 @@ public class HBObjectMapper {
                         continue;
                     Map.Entry<Long, byte[]> lastEntry = columnVersionsMap.lastEntry();
                     objectSetFieldValue(record, field, lastEntry.getValue(), hbColumn.codecFlags());
-                } else if(hbColumn.isMultiId()){
-                	  
-                }else {
+                } else if (hbColumn.isMultiId()) {
+                		JsonArray listJson = new JsonArray();
+                		for(Map.Entry entry : familyMap.entrySet()) {
+                			NavigableMap ciVersionsMap = (NavigableMap)familyMap.get(entry);
+                			Map.Entry lastEntry = ciVersionsMap.lastEntry();
+                			JsonObject jsonObject = new JsonParser().parse(new String((byte[])lastEntry.getValue())).getAsJsonObject();
+                			listJson.add((JsonElement)jsonObject);
+                		}
+                		this.objectSetFieldValue((Object)record, field, listJson.toString().getBytes(), hbColumn.codecFlags());
+                } else {
                     objectSetFieldValue(record, field, columnVersionsMap, hbColumn.codecFlags());
                 }
             }
